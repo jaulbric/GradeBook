@@ -1,0 +1,153 @@
+#!/usr/bin/env python
+import os
+import cPickle as pickle
+import csv
+import Tools
+import Roster
+
+m = Tools.metadata()
+
+class Course:
+	"""container for course objects"""
+	def __init__(self, name):
+		self.name = name
+		self.roster = None
+		self.roster_file = None
+		self.assignments = None
+		self.grades = {}
+		self.grades['Students'] = {}
+		self.grades['Entries'] = []
+		self.grades['Points Possible'] = []
+		self.grades['Weights'] = []
+
+	def load(self, name=None):
+		if name is None:
+			name = self.name
+		
+		pfile = os.path.join(m.repository, "courses", "{0}.pickle".format(name))
+		with open(pfile, "rb") as f:
+			load_dict = pickle.load(f)
+		self.roster_file = load_dict['roster_file']
+		self.assignments = load_dict['assignments']
+		self.grades = load_dict['grades']
+
+		if self.roster_file is not None:
+			self.roster = Roster.Roster(self.roster_file)
+
+	def save(self):
+		"""Saves course to pickle"""
+		pfile = os.path.join(m.repository,"courses","{0}.pickle".format(self.name))
+		with open(pfile, "wb") as f:
+			pickle.dump({'roster_file':self.roster_file, 'assignments':self.assignments, 'grades':self.grades}, f)
+
+	def import_roster(self, rfile, fieldnames=None, nameformat='onecolumn', idcolumn=None):
+		"""import roster from a csv or pickle file"""
+		self.roster = Roster.Roster(rfile, fieldnames=fieldnames, nameformat=nameformat, idcolumn=idcolumn, name=self.name)
+		for student in self.roster.studentlist:
+			self.grades['Students'][student['Last Name'], student['First Name']] = {'Scores':[], 'Total':0., 'Weighted Total':0., 'Percent':None, 'Weighted Percent':None}
+
+	def add_roster(self, roster):
+		"""Add an existing roster from the repository"""
+		rfile = os.path.join(m.repository, "rosters", "{0}.pickle".format(roster))
+		if os.path.isfile(rfile):
+			self.roster = Roster.Roster(rfile)
+			for student in self.roster.studentlist:
+				self.grades['Students'][student['Last Name'], student['First Name']] = {'Scores':[], 'Total':0., 'Weighted Total':0., 'Percent':None, 'Weighted Percent':None}
+		else:
+			print "roster/{0} does not exist.".format(roster)
+
+	def import_grades(self, name, gfile, points_possible=None, matching=False, weight=1.0):
+		"""import grades from file"""
+
+		self.grades['Entries'].append(name)
+		self.grades['Points Possible'].append(points_possible)
+		self.grades['Weights'].append(weight)
+
+		tmp_grades = {}
+		with open(gfile, "r") as f:
+			reader = csv.Reader(f)
+			for row in reader:
+				try:
+					lastname = self.roster[row[0]][row[1]]['Last Name']
+					firstname = self.roster[row[0]][row[1]]['First Name']
+				except KeyError:
+					if matching:
+						lastname, firstname = self.roster.match(row[0], row[1])
+						if (lastname, firstname) in tmp_grades.keys():
+							continue
+					else:
+						continue
+
+				tmp_grades[lastname, firstname] = float(row[2])
+
+		for student in self.roster.studentlist:
+			lastname = student['Last Name']
+			firstname = student['First Name']
+			score = 0
+			try:
+				score = tmp_grades[lastname, firstname]
+			except KeyError:
+				pass
+			self.grades["Students"][lastname, firstname]["Scores"].append(score)
+			self.grades["Students"][lastname, firstname][name] = score
+			self.grades["Students"][lastname, firstname]["Total"] += score
+	
+	def add_student(self, student):
+		new_student = self.roster.add_student(student)
+		self.grades["Students"][new_student['Last Name'], new_student['First Name']] = {'Scores':[], 'Total':0., 'Weighted Total':0., 'Percent':None, 'Weighted Percent':None}
+		for entry in self.grades["Entries"]:
+			self.grades["Students"][new_student['Last Name'], new_student['First Name']]['Scores'].append(0.)
+			self.grades["Students"][new_student['Last Name'], new_student['First Name']][entry] = 0.
+
+	def remove_student(self, lastname, firstname):
+		self.roster.remove_student(lastname, firstname)
+		self.grades["Students"].pop((lastname, firstname))
+
+	def change_grade(self, lastname, firstname, entry, score):
+		old_score = self.grades["Students"][lastname, firstname][entry]
+		self.grades["Students"][lastname, firstname][entry] = score
+		self.grades["Students"][lastname, firstname]["Total"] += (score - old_score)
+
+	def change_weight(self, entry, weight):
+		idx = self.grades["Entries"].index(entry)
+		self.grades["Weights"][idx] = weight
+
+	def change_points_possible(self, entry, points_possible):
+		idx = self.grades["Entries"].index(entry)
+		self.grades["Points Possible"][idx] = points_possible
+
+	def remove_entry(self, entry):
+		idx = self.grades["Entries"].index(entry)
+		self.grades["Entries"].pop(idx)
+		self.grades["Weights"].pop(idx)
+		self.grades["Points Possible"].pop(idx)
+
+		for student in self.roster.studentlist:
+			lastName = student['Last Name']
+			firstName = student['First Name']
+			score = self.grades["Students"][lastName, firstName]["Scores"][idx]
+			self.grades["Students"][lastName, firstName]["Scores"].pop(idx)
+			self.grades["Students"][lastName, firstName]["Total"] -= score
+
+	def calculate_grades(self):
+		points_possible = np.sum(self.grades["Points Possible"])
+		weighted_points_possible = np.sum(np.array(self.grades["Weights"])*np.array(self.grades["Points Possible"]))
+
+		for k in self.grades["Students"].keys():
+			weighted_total = 0.
+			for idx in range(len(self.grades["Entries"])):
+				weighted_total += self.grades["Weight"][idx]*self.grades["Students"][k]["Scores"][idx]
+			self.grades["Students"][k]["Weighted Total"] = weighted_total
+			self.grades["Students"][k]["Percent"] = self.grades["Students"][k]["Total"]/points_possible
+			self.grades["Students"][k]["Weighted Percent"] = weighted_total/weighted_points_possible
+
+
+
+
+
+
+
+
+
+
+

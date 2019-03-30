@@ -1,0 +1,21 @@
+(dp1
+S'assignments'
+p2
+NsS'grades'
+p3
+(dp4
+S'Students'
+p5
+(dp6
+sS'Points Possible'
+p7
+(lp8
+sS'Weights'
+p9
+(lp10
+sS'Entries'
+p11
+(lp12
+ssS'roster_file'
+p13
+Ns.

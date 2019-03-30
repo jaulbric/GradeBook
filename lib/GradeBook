@@ -1,0 +1,214 @@
+#!/usr/bin/env python
+import numpy as np
+import csv
+import cPickle as pickle
+import os
+import datetime
+import errno
+import Tkinter as tk
+import tkFileDialog
+
+class Roster():
+    '''This roster object stores student information and can be saved for later use'''
+    def __init__(self,roster=None):
+        self.roster = {}
+        if roster is not None:
+            filename, ext = os.path.splitext(roster)
+            if ext == '.csv':
+                with open(roster,'r') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        student = {'Student':row['Student'], 'ID':row['ID'], 'SIS User ID':row['SIS User ID'], 'SIS Login ID':row['SIS Login ID'], 'Root Account':row['Root Account'], 'Section':row['Section']}
+                        self.roster[row['SIS User ID']] = student
+            elif (ext == '.pickle') or (ext == '.roster'):
+                self.load(roster)
+            else:
+                print "I do not recognize the extension. I will try load it like a pickle."
+                self.load(roster)
+    
+    def save(self,filename='roster.pickle'):
+        '''saves the current roster to filename'''
+        if os.path.splitext(filename)[-1] != '.pickle':
+            filename = os.path.splitext(filename)[0] + '.pickle'
+        with open(filename,'wb') as f:
+            pickle.dump(self.roster,f)
+
+    def load(self,filename):
+        '''loads a roster'''
+        with open(filename,'r') as f:
+            self.roster = pickle.load(f)
+
+class GUI:
+    '''GUI window to load files.'''
+    def __init__(self, master, old_name, old_roster, old_scores, old_output):
+        self.old_name = old_name
+        self.old_roster = old_roster
+        self.old_scores = old_scores
+        self.old_output = old_output
+
+        self.master = master
+        self.master.bind("<Return>",self.enter)
+        self.master.title("GradeBook")
+        self.roster_label = tk.Label(self.master, text="Roster File")
+        self.roster_label.grid(row=1)
+        self.scores_label = tk.Label(self.master, text="Input Scores")
+        self.scores_label.grid(row=2)
+        self.output_label = tk.Label(self.master, text="Output Filename")
+        self.output_label.grid(row=3)
+        self.class_label = tk.Label(self.master, text="Class Name (optional)")
+        self.class_label.grid(row=0)
+
+        self.roster_file = tk.StringVar()
+        self.scores_file = tk.StringVar()
+        self.output_file = tk.StringVar()
+        self.save_roster = tk.IntVar()
+        self.class_name = tk.StringVar()
+
+        self.e1 = tk.Entry(self.master, width=40, textvariable=self.roster_file)
+        self.e2 = tk.Entry(self.master, width=40, textvariable=self.scores_file)
+        self.e3 = tk.Entry(self.master, width=40, textvariable=self.output_file)
+        self.e4 = tk.Checkbutton(self.master, text="save roster as .pickle", variable=self.save_roster)
+        self.e5 = tk.Entry(self.master, width=40, textvariable=self.class_name)
+
+        self.e1.insert(0,old_roster)
+        self.e2.insert(0,old_scores)
+        self.e3.insert(0,old_output)
+        self.e5.insert(0,old_name)
+
+        self.e1.grid(row=1, column=1, sticky=tk.W, ipady=4)
+        self.e2.grid(row=2, column=1, sticky=tk.W, ipady=4)
+        self.e3.grid(row=3, column=1, sticky=tk.W, ipady=4)
+        self.e4.grid(row=4, column=0, sticky=tk.W)
+        self.e5.grid(row=0, column=1, sticky=tk.W, ipady=4)
+    
+        self.e1.focus_set()
+
+        self.quit_button = tk.Button(self.master, text='Quit', command=self.quit)
+        self.quit_button.grid(row=4, column=1, sticky=tk.E, ipadx=4, pady=4)
+        self.enter_button = tk.Button(self.master, text='Enter', command=self.enter)
+        self.enter_button.grid(row=4, column=2, ipadx=4, pady=4)
+
+        self.roster_browse_button = tk.Button(self.master, text='Browse', command=self.browse_for_roster)
+        self.roster_browse_button.grid(row=1, column=2, sticky=tk.W)
+        self.scores_browse_button = tk.Button(self.master, text='Browse', command=self.browse_for_scores)
+        self.scores_browse_button.grid(row=2, column=2, sticky=tk.W)
+
+    def enter(self,event=None):
+        self.roster = self.roster_file.get()
+        self.scores = self.scores_file.get()
+        self.output = self.output_file.get()
+        self.save = self.save_roster.get()
+        self.classname = self.class_name.get()
+        self.master.quit()
+
+    def quit(self):
+        exit()
+
+    def browse_for_roster(self):
+        if os.path.isabs(self.old_roster):
+            initialdir = os.path.dirname(self.old_roster)
+        else:
+            initialdir = os.path.expanduser("~")
+        roster_file = tkFileDialog.askopenfilename(initialdir=initialdir,title="Select File")
+        self.e1.delete(0,'end')
+        self.e1.insert(0,roster_file)
+
+    def browse_for_scores(self):
+        if os.path.isabs(self.old_scores):
+            initialdir = os.path.dirname(self.old_scores)
+        else:
+            initialdir = os.path.expanduser("~")
+        scores_file = tkFileDialog.askopenfilename(initialdir=initialdir,title="Select File")
+        self.e2.delete(0,'end')
+        self.e2.insert(0,scores_file)
+
+if __name__ == '__main__':
+    os.chdir(os.path.join(os.path.expanduser("~"),"GradeBook"))
+    
+    try:
+        logfile = open(os.path.join(os.path.expanduser("~"),'GradeBook/GradeBook.log'),'r')
+        for line in reversed(logfile.readlines()):
+            if line.split(' ')[0] == 'roster':
+                old_roster = ' '.join(line.split(' ')[1:]).strip()
+            elif line.split(' ')[0] == 'scores':
+                old_scores = ' '.join(line.split(' ')[1:]).strip()
+            elif line.split(' ')[0] == 'output':
+                old_output = ' '.join(line.split(' ')[1:]).strip()
+            elif line.split(' ')[0] == 'class':
+                old_name = ' '.join(line.split(' ')[1:]).strip()
+            elif line[0:13] == 'Last Accessed':
+                break
+        logfile.close()
+        logfile = open(os.path.join(os.path.expanduser("~"),'GradeBook/GradeBook.log'),'a')
+
+    except IOError as e:
+        if e.errno != 2:
+            raise
+        else:
+            logfile = open(os.path.join(os.path.expanduser("~"),'GradeBook/GradeBook.log'),'wb')
+            old_name = ''
+            old_roster = ''
+            old_scores = ''
+            old_output = ''
+
+    root = tk.Tk()
+    gui = GUI(root,old_name,old_roster,old_scores,old_output)
+    root.mainloop()
+
+    roster_file = gui.roster
+    scores_file = gui.scores
+    output_file = gui.output
+
+    if os.path.isabs(scores_file) and not os.path.isabs(output_file):
+        output_file = os.path.join(os.path.dirname(scores_file), output_file)
+
+    logfile.write('Last Accessed {0}\n'.format(datetime.datetime.now().strftime('%H:%M:%S %A %m/%d/%y')))
+    logfile.write('class {0}\n'.format(gui.classname))
+    logfile.write('roster {0}\n'.format(roster_file))
+    logfile.write('scores {0}\n'.format(scores_file))
+    logfile.write('output {0}\n'.format(output_file))
+    logfile.close()
+
+    roster = Roster(roster_file)
+    if gui.save:
+        if gui.classname != '':
+            roster.save(filename=os.path.join(os.path.dirname(roster_file), gui.classname + '_roster.pickle'))
+        else:
+            roster.save(filename=os.path.join(os.path.dirname(roster_file), 'roster.pickle'))
+
+    header = ''
+    id_list = []
+    with open(scores_file,'rb') as csvfile:
+        reader = csv.DictReader(csvfile,fieldnames=['Rank', 'Players', 'Total Score (points)', 'Correct Answer', 'Incorrect Answers'])
+        rows = [row for row in reader]
+        header = rows[0]['Rank']
+        id_list = [row['Players'] for row in rows if row['Rank'].isdigit()]
+
+    header_list = header.split(' ')
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    idx = None
+    for month in months:
+    	try:
+    		idx = header_list.index(month)
+    	except ValueError:
+    		pass
+
+    if idx is not None:
+    	header_list.append('Participation')
+    	output_header = ' '.join(header_list[idx:])
+    else:
+    	output_header = 'Attendance'
+
+    for userID in id_list:
+    	try:
+    		roster.roster[userID][output_header] = 1
+    	except KeyError:
+    		pass
+
+    with open(output_file,'wb') as csvfile:
+        fieldnames = ['Student', 'ID', 'SIS User ID', 'SIS Login ID', 'Root Account', 'Section', output_header]
+        writer = csv.DictWriter(csvfile,fieldnames)
+        writer.writeheader()
+        writer.writerow({'Student':'    Points Possible', output_header:1})
+        for student in roster.roster.values():
+            writer.writerow(student)
