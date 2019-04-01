@@ -49,7 +49,7 @@ def create(args,chatter=2):
             print "not yet"
         else:
             new_course = Course.Course(name)
-            new_course.save()
+            new_course._save()
             print "created {0}/{1}".format(args.TYPE, name)
             return new_course
     
@@ -58,7 +58,7 @@ def create(args,chatter=2):
             print "not yet"
         else:
             new_roster = Roster.Roster(name=name)
-            new_roster.save(name)
+            new_roster._save(name)
             print "created {0}/{1}".format(args.TYPE, name)
             return new_roster
     
@@ -89,7 +89,41 @@ def delete(args,chatter=2):
     else:
         raise IOError("No resource supplied.")
 
-def execute(args,chatter=2):
+def execute(args, chatter=2):
+    """Executes a command on the input type"""
+    name = args.NAME
+    if (name is None) and (args.mode == "ql"):
+        inter = interactive.interface("execute")
+        name = inter.request("{0} name".format(args.TYPE))
+    elif name is None:
+        raise IOError("Cannot execute command on {0} without a name.".format(args.TYPE))
+
+    if args.TYPE == 'course':
+        course = Course.Course(name)
+        course._load(name)
+        f = getattr(course, args.command)
+        positional_args, varargs, keywords, defaults = inspect.getargspec(f)
+        method_args = [vars(args)[a] for a in positional_args[1:]]
+        if varargs is not None:
+            for va in vars(args)[varargs]:
+                method_args.append(va)
+        return_args = f(*method_args)
+        course._save()
+        return return_args
+
+    if args.TYPE == 'roster':
+        roster = Roster.Roster(name)
+        f = getattr(roster, args.command)
+        positional_args, varargs, keywords, defaults = inspect.getargspec(f)
+        method_args = [vars(args)[a] for a in argspec[0][1:]]
+        if varargs is not None:
+            for va in vars(args)[varargs]:
+                method_args.append(va)
+        return_args = f(*method_args)
+        roster._save(name)
+        return return_args
+
+def old_execute(args,chatter=2):
     """Executes a command on the input type"""
     name = args.NAME
     if (name is None) and (args.mode == "ql"):
@@ -98,9 +132,10 @@ def execute(args,chatter=2):
     elif name is None:
         raise IOError("Cannot execute command on {0} without a name.".format(args.TYPE))
     
+    print args.command
     if args.TYPE == "course":
         course = Course.Course(name)
-        course.load()
+        course._load()
         try:
             func = getattr(course, args.command[0])
             return_values = func(*args.command[1:])
